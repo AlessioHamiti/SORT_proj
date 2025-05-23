@@ -1,0 +1,23 @@
+{
+  "name": "RTOS dev env",
+  "build": {
+    "dockerfile": "dockerfile"
+  },
+  "runArgs": [
+    "--cap-add=SYS_NICE",
+    "--ulimit",
+    "rtprio=99:99"
+  ],
+  "workspaceFolder": "/workspace",
+  "remoteUser": "root",
+  "mounts": [
+    "source=/Users/alessiohamiti/GitHub/RTOS,target=/workspace,type=bind"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.vscode-dotnet-runtime"
+      ]
+    }
+  }
+}
