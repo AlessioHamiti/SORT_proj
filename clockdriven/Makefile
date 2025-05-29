@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -O3 -Wall -pthread -std=c++11
 LFLAGS = -Lrt -pthread -lrt_pthread
 
-OUT = rt/librt_pthread.a application_1 application_2
+OUT = rt/librt_pthread.a application_1 application_2 application_3
 
 all : $(OUT)
 	
