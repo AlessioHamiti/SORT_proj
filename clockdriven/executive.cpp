@@ -59,21 +59,17 @@ void Executive::task_function(TaskData& T) {
         });
         lk.unlock();
 
+        
+
+#ifdef VERBOSE
+        rt::priority current_priority = rt::get_priority(T.thread);
+        std::cout << "[Task] Running task priority: " << current_priority << std::endl;
+#endif
         // esecuzione: setta running
         {
             std::lock_guard<std::mutex> lg(T.state_mtx);
             T.state = State::Running;
         }
-        rt::priority current_priority = rt::get_priority(T.thread);
-
-#ifdef VERBOSE
-        std::cout << "[Task] Running task priority: " << current_priority << std::endl;
-#endif
-        // attende il rilascio
-        auto now = std::chrono::steady_clock::now();
-        if (now < T.release_time)
-            std::this_thread::sleep_until(T.release_time);
-
         // esegue il task
         T.function();
 
@@ -88,7 +84,14 @@ void Executive::task_function(TaskData& T) {
 void Executive::exec_function() {
     size_t frame_id = 0;
     auto next_time = std::chrono::steady_clock::now();
-
+    /*
+// Reset di tutti i task in Idle e priorità minima
+        for (auto& T : tasks) {
+            std::lock_guard<std::mutex> lg(T.state_mtx);
+            T.state = State::Idle;
+            rt::set_priority(T.thread, rt::priority::rt_min);
+        }
+*/
     while (true) {
 #ifdef VERBOSE
         std::cout << "*** Frame " << frame_id << " start ***" << std::endl;
@@ -96,12 +99,7 @@ void Executive::exec_function() {
         auto frame_start = next_time;
         next_time = frame_start + frame_length * unit_time;
 
-        // Reset di tutti i task in Idle e priorità minima
-        for (auto& T : tasks) {
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            T.state = State::Idle;
-            rt::set_priority(T.thread, rt::priority::rt_min);
-        }
+        
 
         // Attiva i task del frame con priorità decrescente
         rt::priority maxp = rt::priority::rt_max;;
@@ -140,10 +138,11 @@ void Executive::exec_function() {
             if (!idle) {
                 std::cerr << "Deadline miss: task " << tid << std::endl;
                 rt::set_priority(T.thread, rt::priority::rt_min);
-                {
+                if (T.state == State::Pending) {
+                    // se il task è in pending, lo mettiamo in idle
                     std::lock_guard<std::mutex> lg(T.state_mtx);
                     T.state = State::Idle;
-                }
+                } 
                 T.skip_count = 1;
             }
         }
