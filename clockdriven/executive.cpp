@@ -62,20 +62,27 @@ void Executive::wait() {
 }
 
 void Executive::ap_task_request() {
+    Executive::State state;
+    {
     std::lock_guard<std::mutex> lg(ap_T.state_mtx);
-
+    state = ap_T.state;
+    }
     // Se il task aperiodico è già in esecuzione o pending salta
-    if (ap_T.state == State::Running || ap_T.state == State::Pending) {
+    if (state == State::Running || state == State::Pending) {
         std::cerr << "[AP] Deadline miss: richiesta ignorata perché il task è ancora in esecuzione\n";
         ap_T.skip_count = 1; 
         return;
     }
 
     // Altrimenti imposto Pending e sveglio il thread
-    ap_T.state = State::Pending;
     ap_T.skip_count = 0;
+    {
+    std::lock_guard<std::mutex> lg(ap_T.state_mtx);
+    ap_T.state = State::Pending;
     ap_T.cv.notify_one();
-}
+    }
+    }
+    
 
 
 void Executive::task_function(TaskData& T) {
@@ -116,6 +123,20 @@ void Executive::exec_function() {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
 #endif
+ // controllo task ancora in Running da frame precedente
+        for (size_t tid = 0; tid < tasks.size(); ++tid) {
+            auto& T = tasks[tid];
+            bool was_running;
+            {
+                std::lock_guard<std::mutex> lg(T.state_mtx);
+                was_running = (T.state == State::Running);
+            }
+            if (was_running) {
+#ifdef VERBOSE
+         std::cout << "\e[0;32m"<<"[Exec] Task " << tid << " riprende da frame precedente" << "\033[0m" << std::endl;
+#endif
+            }
+        }
     // Calcolo dello slack time dei frame successivi
     for (size_t i = 0; i < frames.size(); i++) {
         slack_times[i] = frame_length+1;
@@ -201,8 +222,8 @@ void Executive::exec_function() {
     std::this_thread::sleep_until(next_time);
 
     // verifica deadline miss
-    for (auto tid : frames[frame_id]) {
-        auto& T = tasks[tid];
+    int tid = 0;
+    for (auto& T : tasks) {
         bool idle;
         {
             std::lock_guard<std::mutex> lg(T.state_mtx);
@@ -222,9 +243,11 @@ void Executive::exec_function() {
                 std::lock_guard<std::mutex> lg(T.state_mtx);
                 T.state = State::Idle;
             } 
-            T.skip_count = 1;
+            T.skip_count += 1;
         }
+        ++tid;
     }
+
 
 #ifdef VERBOSE
         std::cout << "\e[0;34m" << "*** Frame " << frame_id << " end ***" << "\033[0m" << std::endl;
