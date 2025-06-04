@@ -126,6 +126,20 @@ void Executive::exec_function() {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
 #endif
+ // controllo task ancora in Running da frame precedente
+        for (size_t tid = 0; tid < tasks.size(); ++tid) {
+            auto& T = tasks[tid];
+            bool was_running;
+            {
+                std::lock_guard<std::mutex> lg(T.state_mtx);
+                was_running = (T.state == State::Running);
+            }
+            if (was_running) {
+#ifdef VERBOSE
+         std::cout << "\e[0;32m"<<"[Exec] Task " << tid << " riprende da frame precedente" << "\033[0m" << std::endl;
+#endif
+            }
+        }
     // Calcolo dello slack time dei frame successivi
     for (size_t i = 0; i < frames.size(); i++) {
         slack_times[i] = frame_length+1;

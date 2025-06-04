@@ -71,7 +71,7 @@ int main()
 	exec.set_periodic_task(4, std::bind(task4, std::ref(exec)), 3);
 	exec.set_periodic_task(5, task5, 1);
 	
-	//exec.set_aperiodic_task(task_ap, 5);
+	exec.set_aperiodic_task(task_ap, 5);
 	
 	exec.add_frame({0,1,2});
 	exec.add_frame({3,4});
