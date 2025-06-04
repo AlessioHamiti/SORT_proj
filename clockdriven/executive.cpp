@@ -114,7 +114,14 @@ void Executive::task_function(TaskData& T) {
 void Executive::exec_function() {
     size_t frame_id = 0;
     auto next_time = std::chrono::steady_clock::now();
-
+    /*
+// Reset di tutti i task in Idle e priorità minima
+        for (auto& T : tasks) {
+            std::lock_guard<std::mutex> lg(T.state_mtx);
+            T.state = State::Idle;
+            rt::set_priority(T.thread, rt::priority::rt_min);
+        }
+*/
     while (true) {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
