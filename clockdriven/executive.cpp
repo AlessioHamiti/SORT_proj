@@ -217,8 +217,8 @@ void Executive::exec_function() {
     std::this_thread::sleep_until(next_time);
 
     // verifica deadline miss
-    for (auto tid : frames[frame_id]) {
-        auto& T = tasks[tid];
+    int tid = 0;
+    for (auto& T : tasks) {
         bool idle;
         {
             std::lock_guard<std::mutex> lg(T.state_mtx);
@@ -238,9 +238,11 @@ void Executive::exec_function() {
                 std::lock_guard<std::mutex> lg(T.state_mtx);
                 T.state = State::Idle;
             } 
-            T.skip_count = 1;
+            T.skip_count += 1;
         }
+        ++tid;
     }
+
 
 #ifdef VERBOSE
         std::cout << "\e[0;34m" << "*** Frame " << frame_id << " end ***" << "\033[0m" << std::endl;
