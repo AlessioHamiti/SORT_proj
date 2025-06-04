@@ -34,13 +34,10 @@ void Executive::set_periodic_task(size_t task_id,std::function<void()> periodic_
 void Executive::set_aperiodic_task(std::function<void()> aperiodic_task, unsigned int wcet) {
     ap_T.function = std::move(aperiodic_task);
     ap_T.wcet = wcet;
+    ap_T.state = State::Idle;
     ap_T.skip_count = 0;
 
     ap_T.thread = std::thread(&Executive::task_function, std::ref(ap_T));
-    {
-        std::lock_guard<std::mutex> lg(ap_T.state_mtx);
-        ap_T.state = State::Idle;
-    }
 
     rt::set_priority(ap_T.thread, rt::priority::rt_min);
 }
@@ -114,14 +111,7 @@ void Executive::task_function(TaskData& T) {
 void Executive::exec_function() {
     size_t frame_id = 0;
     auto next_time = std::chrono::steady_clock::now();
-    /*
-// Reset di tutti i task in Idle e priorità minima
-        for (auto& T : tasks) {
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            T.state = State::Idle;
-            rt::set_priority(T.thread, rt::priority::rt_min);
-        }
-*/
+
     while (true) {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
@@ -135,8 +125,6 @@ void Executive::exec_function() {
             auto& T = tasks[tid];
             slack_times[i] -= T.wcet;
         }
-
-        // std::cout << "Slack time frame n." << i << ": " << slack_times[i] << std::endl;
     }
 #ifdef VERBOSE
     std::cout << "Slack time a disposizione: " << slack_times[frame_id] << std::endl;
@@ -152,12 +140,14 @@ void Executive::exec_function() {
         rt::set_priority(T.thread, rt::priority::rt_min);
     }
     */
+    
 
+    // Slack stealing
     {
         std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
-        if (ap_T.state == State::Pending && slack_times[frame_id] > 0 && ap_T.skip_count == 0) {
+        if (ap_T.state == State::Running && slack_times[frame_id] > 0 && ap_T.skip_count == 0) {
             ap_T.release_time = frame_start;
-            // ap_T.deadline_time = frame_start + frame_length * unit_time;
+            std::cout << "[AP] Attivo aperiodico (slack disponibile)\n";
             // viene settata la priorità di poco superiore a quella minima
             // per consentire la preemption da parte dei task periodici
             rt::set_priority(ap_T.thread, rt::priority::rt_min + 1);
@@ -169,11 +159,19 @@ void Executive::exec_function() {
         }
     }
 
-    if (ap_T.state != State::Idle){
-        std::cout << "ciaooooooooooo" << std::endl;
-        // Slack stealing
-        auto slack_end = frame_start + std::chrono::milliseconds(slack_times[frame_id] * unit_time);
-        std::this_thread::sleep_until(slack_end);
+    auto slack_end = frame_start + std::chrono::milliseconds(slack_times[frame_id] * unit_time);
+    std::this_thread::sleep_until(slack_end);
+
+    // Qui, poco prima di dare priorità ai periodici, controlla preemption:
+    {
+        std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
+        if (ap_T.state == State::Running) {
+            // vuol dire che è ancora in esecuzione e verrà preemptato
+            std::cout << "[AP] Preemption: fermo aperiodico per far partire periodici\n";
+            // Rimetto priorità a minima (opzionale, ma consigliato per non farlo restare in mezzo)
+            rt::set_priority(ap_T.thread, rt::priority::rt_min);
+            ap_T.state = State::Idle; // facciamolo tornare "Idle"
+        }
     }
 
     // Attiva i task del frame con priorità decrescente
