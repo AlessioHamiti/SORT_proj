@@ -50,10 +50,8 @@ void task5()
 
 void task_ap()
 {
-    // codice ANSI per il colore giallo: "\033[33m"
     std::cout << "\033[33m" << "Il task AP viene rilasciato" << "\033[0m" << std::endl;
     busy_wait(42);
-    // codice ANSI per il colore verde: "\033[32m"
     std::cout << "\033[32m" << "Il task AP ha terminato" << "\033[0m" << std::endl;
 }
 
