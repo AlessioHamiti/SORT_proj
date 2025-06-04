@@ -34,10 +34,13 @@ void Executive::set_periodic_task(size_t task_id,std::function<void()> periodic_
 void Executive::set_aperiodic_task(std::function<void()> aperiodic_task, unsigned int wcet) {
     ap_T.function = std::move(aperiodic_task);
     ap_T.wcet = wcet;
-    ap_T.state = State::Idle;
     ap_T.skip_count = 0;
 
     ap_T.thread = std::thread(&Executive::task_function, std::ref(ap_T));
+    {
+        std::lock_guard<std::mutex> lg(ap_T.state_mtx);
+        ap_T.state = State::Idle;
+    }
 
     rt::set_priority(ap_T.thread, rt::priority::rt_min);
 }
@@ -165,8 +168,6 @@ void Executive::exec_function() {
     }
     */
     
-
-    // Slack stealing
     rt::priority current_priority = rt::get_priority(ap_T.thread);
     if (ap_T.state == State::Pending){
         std::cout << "state: Pending" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
@@ -177,7 +178,8 @@ void Executive::exec_function() {
     } else {
         std::cout << "state: Altro" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
     }
-    
+
+    // Slack stealing
     {
         std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
         if (ap_T.state == State::Pending && slack_times[frame_id] > 0 && ap_T.skip_count == 0) {
@@ -196,8 +198,10 @@ void Executive::exec_function() {
         }
     }
 
-    auto slack_end = frame_start + std::chrono::milliseconds(slack_times[frame_id] * unit_time);
-    std::this_thread::sleep_until(slack_end);
+    if (ap_T.state == State::Running){
+        auto slack_end = frame_start + std::chrono::milliseconds(slack_times[frame_id] * unit_time);
+        std::this_thread::sleep_until(slack_end);
+    }
 
     
 

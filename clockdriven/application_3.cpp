@@ -51,7 +51,7 @@ void task5()
 void task_ap()
 {
     std::cout << "\033[33m" << "Il task AP viene rilasciato" << "\033[0m" << std::endl;
-    busy_wait(42);
+    busy_wait(200);
     std::cout << "\033[32m" << "Il task AP ha terminato" << "\033[0m" << std::endl;
 }
 
