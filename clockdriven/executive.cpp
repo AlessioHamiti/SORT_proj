@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 #include <string>
-#define VERBOSE
+//#define VERBOSE
 
 Executive::Executive(size_t num_tasks,unsigned int frame_length_,unsigned int unit_duration_ms)
     : tasks(num_tasks),frame_length(frame_length_),unit_time(unit_duration_ms)
@@ -129,7 +129,7 @@ void Executive::exec_function() {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
 #endif
- // controllo task ancora in Running da frame precedente
+        // controllo task ancora in Running da frame precedente
         for (size_t tid = 0; tid < tasks.size(); ++tid) {
             auto& T = tasks[tid];
             bool was_running;
@@ -159,26 +159,6 @@ void Executive::exec_function() {
     auto frame_start = next_time;
     next_time = frame_start + frame_length * unit_time;
 
-    // Reset dei task periodici ad idle + priorità minima
-    /*
-    for (auto& T : tasks) {
-        std::lock_guard<std::mutex> lg(T.state_mtx);
-        T.state = State::Idle;
-        rt::set_priority(T.thread, rt::priority::rt_min);
-    }
-    */
-    
-    rt::priority current_priority = rt::get_priority(ap_T.thread);
-    if (ap_T.state == State::Pending){
-        std::cout << "state: Pending" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else if (ap_T.state == State::Running){
-        std::cout << "state: Running" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else if (ap_T.state == State::Idle){
-        std::cout << "state: Idle" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else {
-        std::cout << "state: Altro" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    }
-
     // Slack stealing
     {
         std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
@@ -202,8 +182,6 @@ void Executive::exec_function() {
         auto slack_end = frame_start + std::chrono::milliseconds(slack_times[frame_id] * unit_time);
         std::this_thread::sleep_until(slack_end);
     }
-
-    
 
     // Attiva i task del frame con priorità decrescente
     rt::priority maxp = rt::priority::rt_max;;
@@ -230,18 +208,6 @@ void Executive::exec_function() {
 
     // dormi fino al prossimo frame
     std::this_thread::sleep_until(next_time);
-
-    // Slack stealing
-    current_priority = rt::get_priority(ap_T.thread);
-    if (ap_T.state == State::Pending){
-        std::cout << "state: Pending" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else if (ap_T.state == State::Running){
-        std::cout << "state: Running" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else if (ap_T.state == State::Idle){
-        std::cout << "state: Idle" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    } else {
-        std::cout << "state: Altro" << ", slack time: " << slack_times[frame_id] << "priorità" << current_priority << std::endl;
-    }
 
     // verifica deadline miss
     int tid = 0;
