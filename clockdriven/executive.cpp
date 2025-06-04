@@ -65,20 +65,27 @@ void Executive::wait() {
 }
 
 void Executive::ap_task_request() {
+    Executive::State state;
+    {
     std::lock_guard<std::mutex> lg(ap_T.state_mtx);
-
+    state = ap_T.state;
+    }
     // Se il task aperiodico è già in esecuzione o pending salta
-    if (ap_T.state == State::Running || ap_T.state == State::Pending) {
+    if (state == State::Running || state == State::Pending) {
         std::cerr << "[AP] Deadline miss: richiesta ignorata perché il task è ancora in esecuzione\n";
         ap_T.skip_count = 1; 
         return;
     }
 
     // Altrimenti imposto Pending e sveglio il thread
-    ap_T.state = State::Pending;
     ap_T.skip_count = 0;
+    {
+    std::lock_guard<std::mutex> lg(ap_T.state_mtx);
+    ap_T.state = State::Pending;
     ap_T.cv.notify_one();
-}
+    }
+    }
+    
 
 
 void Executive::task_function(TaskData& T) {
