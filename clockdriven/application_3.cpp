@@ -35,7 +35,7 @@ void task4(Executive & e)
 	if (++count % 5 == 0)
 	{
 		busy_wait(5);
-		//e.ap_task_request();
+		e.ap_task_request();
 		busy_wait(7);
 	}
 	else
@@ -50,10 +50,13 @@ void task5()
 
 void task_ap()
 {
-	std::cout << "Il task AP viene rilasciato" << std::endl;
-	busy_wait(42);
-	std::cout << "Il task AP ha terminato" << std::endl;
+    // codice ANSI per il colore giallo: "\033[33m"
+    std::cout << "\033[33m" << "Il task AP viene rilasciato" << "\033[0m" << std::endl;
+    busy_wait(42);
+    // codice ANSI per il colore verde: "\033[32m"
+    std::cout << "\033[32m" << "Il task AP ha terminato" << "\033[0m" << std::endl;
 }
+
 
 int main()
 {
