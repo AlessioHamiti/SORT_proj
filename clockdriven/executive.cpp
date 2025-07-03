@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 #include <string>
-//#define VERBOSE
+#define VERBOSE
 
 Executive::Executive(size_t num_tasks,unsigned int frame_length_,unsigned int unit_duration_ms)
     : tasks(num_tasks),frame_length(frame_length_),unit_time(unit_duration_ms)
@@ -93,31 +93,25 @@ void Executive::ap_task_request() {
 
 void Executive::task_function(TaskData& T) {
     while (true) {
+        {
         // aspetta pending
-        std::unique_lock<std::mutex> lk(T.mtx);
-        T.cv.wait(lk, [&]{
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            return T.state == State::Pending;
-        });
-        lk.unlock();
+        std::unique_lock<std::mutex> lk(T.state_mtx);
+        T.state = State::Idle;
+        while(!(T.state == State::Pending)) {
+            // se il task è stato messo in Idle, aspetta di nuovo
+            T.cv.wait(lk);
+        }
 
 #ifdef VERBOSE
         rt::priority current_priority = rt::get_priority(T.thread);
         std::cout << "[Task] Running task priority: " << current_priority << std::endl;
 #endif
-        // esecuzione: setta running
-        {
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            T.state = State::Running;
+
+        T.state = State::Running;
         }
         // esegue il task
         T.function();
 
-        // torna idle
-        {
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            T.state = State::Idle;
-        }
     }
 }
 
