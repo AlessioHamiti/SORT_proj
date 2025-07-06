@@ -38,7 +38,7 @@ public:
 		frame: lista degli id corrispondenti ai task da eseguire nel frame, in sequenza
 	*/
 	void add_frame(std::vector<size_t> frame);
-	
+
 	/* [RUN] Lancia l'applicazione */
 	void start();
 
@@ -67,9 +67,13 @@ private:
 	TaskData ap_T;
     std::thread exec_thread;
     std::vector<std::vector<size_t>> frames;
-	std::vector<int> slack_times = std::vector<int>(100, 0);
+	std::vector<int> slack_times;
     unsigned int frame_length;
     std::chrono::milliseconds unit_time;
+    
+    // Variabile per segnalare richieste aperiodiche
+    bool ap_request_pending{false};
+    std::mutex ap_request_mtx;
 
     static void task_function(TaskData& T);
     void exec_function();
