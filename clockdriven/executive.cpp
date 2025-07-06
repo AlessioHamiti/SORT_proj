@@ -158,46 +158,60 @@ void Executive::exec_function() {
 
         if (ap_request) {
             // Quando ricevo una richiesta aperiodica, controllo se c'è un task aperiodico in esecuzione o pending
+            {
             std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
             ap_state = ap_T.state;
-            
+            }
             if (ap_state == State::Running || ap_state == State::Pending) {
                 std::cerr << "[AP] Deadline miss: richiesta ignorata perché il task aperiodico è ancora in esecuzione\n";
+                {
+                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
                 ap_T.skip_count = 1; 
+                }
+                
             } else {
+                {
+                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
                 ap_T.skip_count = 0;
                 ap_T.state = State::Pending;
+                }
+                
             }
             ap_running = true;
             ap_request = false;
         }
 
         // Gestione task aperiodico
-        if (!ap_request) {
+        auto ap_skip_count = 0;
+        {
             std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
             ap_state = ap_T.state;
-            
-            if (ap_state != State::Idle && ap_T.skip_count == 0) {
+            ap_skip_count = ap_T.skip_count;
+        }
+        if (ap_state != State::Idle && ap_skip_count == 0) {
+            {
+                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
                 ap_T.release_time = frame_start;
-                
-                if (slack_times[frame_id] > 0) {
-                    // Se c'è slack time, priorità massima-1 (inferiore all'executive)
-                    rt::set_priority(ap_T.thread, rt::priority::rt_max - 1);
-#ifdef VERBOSE
-                    std::cout << "[AP] Attivo aperiodico con priorità alta (slack disponibile)\n";
-#endif
-                } else {
-                    // Se non c'è slack time, priorità minima ma comunque schedulato
-                    rt::set_priority(ap_T.thread, rt::priority::rt_min);
-#ifdef VERBOSE
-                    std::cout << "[AP] Attivo aperiodico con priorità minima (senza slack)\n";
-#endif
-                }
-                ap_T.cv.notify_one();
             }
-            else if (ap_state == State::Idle) {
-                ap_running = false;
+            
+            
+            if (slack_times[frame_id] > 0) {
+                // Se c'è slack time, priorità massima-1 (inferiore all'executive)
+                rt::set_priority(ap_T.thread, rt::priority::rt_max - 1);
+#ifdef VERBOSE
+                std::cout << "[AP] Attivo aperiodico con priorità alta (slack disponibile)\n";
+#endif
+            } else {
+                // Se non c'è slack time, priorità minima ma comunque schedulato
+                rt::set_priority(ap_T.thread, rt::priority::rt_min);
+#ifdef VERBOSE
+                std::cout << "[AP] Attivo aperiodico con priorità minima (senza slack)\n";
+#endif
             }
+            ap_T.cv.notify_one();
+        }
+        else if (ap_state == State::Idle) {
+            ap_running = false;
         }
         
         // Gestione skip_count per task aperiodico
@@ -215,11 +229,14 @@ void Executive::exec_function() {
         for (size_t i = 0; i < frames[frame_id].size(); ++i) {
             size_t tid = frames[frame_id][i];
             auto& T = tasks[tid];
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            if (T.skip_count > 0) {
-                --T.skip_count;
-                continue;
+            {
+                std::lock_guard<std::mutex> lg(T.state_mtx);
+                if (T.skip_count > 0) {
+                    --T.skip_count;
+                    continue;
+                }
             }
+            
             if (ap_running){
                 prio_val = maxp - static_cast<int>(i + 2);
                 #ifdef VERBOSE
@@ -239,9 +256,13 @@ void Executive::exec_function() {
             rt::set_priority(T.thread, prio_val);
 
             // set release e deadline
+            {
+            std::lock_guard<std::mutex> lg(T.state_mtx);
             T.release_time = frame_start;
             T.deadline_time = frame_start + frame_length * unit_time;
             T.state = State::Pending;
+            }
+            
             T.cv.notify_one();
         }
 
@@ -251,11 +272,8 @@ void Executive::exec_function() {
             std::cout << "[AP] Dormo\n";
 #endif
             std::this_thread::sleep_until(slack);
-            {
-            std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
             rt::set_priority(ap_T.thread, rt::priority::rt_min);
             ap_T.cv.notify_one();
-            }
 #ifdef VERBOSE
             std::cout << "[AP] Task aperiodico in attesa fino allo slack time, torno a dormire\n";
 #endif
@@ -285,7 +303,12 @@ void Executive::exec_function() {
                     std::lock_guard<std::mutex> lg(T.state_mtx);
                     T.state = State::Idle;
                 } 
-                T.skip_count += 1;
+
+                {
+                    std::lock_guard<std::mutex> lg(T.state_mtx);
+                    T.skip_count += 1;
+                }
+                
             }
             ++tid;
         }
