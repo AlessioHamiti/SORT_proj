@@ -79,8 +79,10 @@ void Executive::wait() {
 
 void Executive::ap_task_request() {
     // Segnala la presenza di una richiesta aperiodica
+    {
     std::lock_guard<std::mutex> lg(ap_request_mtx);
     ap_request_pending = true;
+    }
 #ifdef VERBOSE
     std::cout << "[AP] Richiesta aperiodico ricevuta\n";
 #endif
@@ -122,6 +124,7 @@ void Executive::exec_function() {
     size_t frame_id = 0;
     auto next_time = std::chrono::steady_clock::now();
     bool ap_request = false;
+    bool ap_running = false;
     State ap_state;
 
     while (true) {
@@ -165,7 +168,7 @@ void Executive::exec_function() {
                 ap_T.skip_count = 0;
                 ap_T.state = State::Pending;
             }
-
+            ap_running = true;
             ap_request = false;
         }
 
@@ -192,8 +195,10 @@ void Executive::exec_function() {
                 }
                 ap_T.cv.notify_one();
             }
+            else if (ap_state == State::Idle) {
+                ap_running = false;
+            }
         }
-
         
         // Gestione skip_count per task aperiodico
         {
@@ -206,6 +211,7 @@ void Executive::exec_function() {
 
         // Attiva i task del frame con priorità decrescente
         rt::priority maxp = rt::priority::rt_max;;
+        rt::priority prio_val;
         for (size_t i = 0; i < frames[frame_id].size(); ++i) {
             size_t tid = frames[frame_id][i];
             auto& T = tasks[tid];
@@ -214,8 +220,20 @@ void Executive::exec_function() {
                 --T.skip_count;
                 continue;
             }
+            if (ap_running){
+                prio_val = maxp - static_cast<int>(i + 2);
+                #ifdef VERBOSE
+                std::cout << "[AP] ATTIVO, quindi priorità task decreased: " <<prio_val <<"\n";
+                #endif
+            }
+            else {
+                prio_val = maxp - static_cast<int>(i + 1);
+                #ifdef VERBOSE
+                std::cout << "[AP] INATTIVO, quindi priorità task normal: "<<prio_val <<"\n";
+                #endif
+            }
             // calcolo prio_val = maxp - (i+1), clamped a [min+1, maxp]
-            rt::priority prio_val = maxp - static_cast<int>(i + 1);
+            //rt::priority prio_val = maxp - static_cast<int>(i + 1);
             rt::priority minp = rt::priority::rt_min + 1;
             if (prio_val < minp) prio_val = minp;
             rt::set_priority(T.thread, prio_val);
@@ -227,6 +245,21 @@ void Executive::exec_function() {
             T.cv.notify_one();
         }
 
+        if (ap_running){
+            auto slack = frame_start + slack_times[frame_id] * unit_time;
+            #ifdef VERBOSE
+            std::cout << "[AP] Dormo\n";
+#endif
+            std::this_thread::sleep_until(slack);
+            {
+            std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
+            rt::set_priority(ap_T.thread, rt::priority::rt_min);
+            ap_T.cv.notify_one();
+            }
+#ifdef VERBOSE
+            std::cout << "[AP] Task aperiodico in attesa fino allo slack time, torno a dormire\n";
+#endif
+        }
         // dormi fino al prossimo frame
         std::this_thread::sleep_until(next_time);
 
