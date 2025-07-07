@@ -91,24 +91,18 @@ void Executive::ap_task_request() {
 
 
 void Executive::task_function(TaskData& T) {
-    while (true) {
-        // aspetta pending
-        std::unique_lock<std::mutex> lk(T.mtx);
-        T.cv.wait(lk, [&]{
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            return T.state == State::Pending;
-        });
+   while(true) {
+        std::unique_lock<std::mutex> lk(T.state_mtx);
+        T.state = State::Idle;
+        while(!(T.state == State::Pending)) {
+            T.cv.wait(lk);
+        }
+        T.state = State::Running;
         lk.unlock();
-
 #ifdef VERBOSE
         rt::priority current_priority = rt::get_priority(T.thread);
         std::cout << "[Task] Running task priority: " << current_priority << std::endl;
 #endif
-        // esecuzione: setta running
-        {
-            std::lock_guard<std::mutex> lg(T.state_mtx);
-            T.state = State::Running;
-        }
         // esegue il task
         T.function();
 
@@ -117,7 +111,8 @@ void Executive::task_function(TaskData& T) {
             std::lock_guard<std::mutex> lg(T.state_mtx);
             T.state = State::Idle;
         }
-    }
+
+   }
 }
 
 void Executive::exec_function() {
