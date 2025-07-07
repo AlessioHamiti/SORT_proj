@@ -190,7 +190,7 @@ void Executive::exec_function() {
             ap_state = ap_T.state;
             ap_skip_count = ap_T.skip_count;
         }
-        if (ap_state != State::Idle && ap_skip_count == 0) {
+        if (ap_state != State::Pending && ap_skip_count == 0) {
             {
                 std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
                 ap_T.release_time = frame_start;
