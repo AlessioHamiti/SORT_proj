@@ -35,7 +35,6 @@ void Executive::set_periodic_task(size_t task_id,std::function<void()> periodic_
 void Executive::set_aperiodic_task(std::function<void()> aperiodic_task, unsigned int wcet) {
     ap_T.function = std::move(aperiodic_task);
     ap_T.wcet = wcet;
-    ap_T.skip_count = 0;
 
     ap_T.thread = std::thread(&Executive::task_function, std::ref(ap_T));
     {
@@ -158,9 +157,7 @@ void Executive::exec_function() {
             
             if (ap_state == State::Running || ap_state == State::Pending) {
                 std::cerr << "[AP] Deadline miss: richiesta ignorata perché il task aperiodico è ancora in esecuzione\n";
-                ap_T.skip_count = 1;
             } else {
-                ap_T.skip_count = 0;
                 ap_T.state = State::Pending;
             }
             ap_running = true;
