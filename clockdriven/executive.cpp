@@ -126,6 +126,13 @@ void Executive::exec_function() {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
 #endif
+        {
+            std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
+            ap_state = ap_T.state;
+            if (ap_state == State::Running) {
+                ap_T.state = State::Idle;
+            }
+        }
         // controllo task ancora in Running da frame precedente
         for (size_t tid = 0; tid < tasks.size(); ++tid) {
             auto& T = tasks[tid];
