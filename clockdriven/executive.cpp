@@ -93,7 +93,6 @@ void Executive::ap_task_request() {
 void Executive::task_function(TaskData& T) {
    while(true) {
         std::unique_lock<std::mutex> lk(T.state_mtx);
-        T.state = State::Idle;
         while(!(T.state == State::Pending)) {
             T.cv.wait(lk);
         }
@@ -126,13 +125,7 @@ void Executive::exec_function() {
 #ifdef VERBOSE
         std::cout << "\e[0;34m" <<"*** Frame " << frame_id << " start ***" << "\033[0m" << std::endl;
 #endif
-        {
-            std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
-            ap_state = ap_T.state;
-            if (ap_state == State::Running) {
-                ap_T.state = State::Idle;
-            }
-        }
+
         // controllo task ancora in Running da frame precedente
         for (size_t tid = 0; tid < tasks.size(); ++tid) {
             auto& T = tasks[tid];
@@ -190,13 +183,8 @@ void Executive::exec_function() {
             ap_state = ap_T.state;
             ap_skip_count = ap_T.skip_count;
         }
-        if (ap_state != State::Pending && ap_skip_count == 0) {
-            {
-                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
-                ap_T.release_time = frame_start;
-            }
-            
-            
+        if (ap_state != State::Idle && ap_skip_count == 0) {
+            ap_running = true;
             if (slack_times[frame_id] > 0) {
                 // Se c'è slack time, priorità massima-1 (inferiore all'executive)
                 rt::set_priority(ap_T.thread, rt::priority::rt_max - 1);
@@ -213,6 +201,9 @@ void Executive::exec_function() {
             ap_T.cv.notify_one();
         }
         else if (ap_state == State::Idle) {
+#ifdef VERBOSE
+                std::cout << "[AP] finito, torno false\n";
+#endif
             ap_running = false;
         }
         
@@ -276,7 +267,7 @@ void Executive::exec_function() {
 #endif
             std::this_thread::sleep_until(slack);
         rt::set_priority(ap_T.thread, rt::priority::rt_min);
-        ap_T.cv.notify_one();
+        ap_running = false;
 #ifdef VERBOSE
         std::cout << "[AP] Task aperiodico in attesa fino allo slack time, torno a dormire\n";
 #endif
