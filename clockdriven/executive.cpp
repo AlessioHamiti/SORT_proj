@@ -259,29 +259,21 @@ void Executive::exec_function() {
         int tid = 0;
         for (auto& T : tasks) {
             bool idle;
-            {
-                std::lock_guard<std::mutex> lg(T.state_mtx);
-                idle = (T.state == State::Idle);
-            }
+            std::lock_guard<std::mutex> lg(T.state_mtx);
+            idle = (T.state == State::Idle);
+
             if (!idle) {
                 std::cerr << "\e[0;31m" << "Deadline miss" << "\033[0m" << ": task " << tid << std::endl;
                 rt::set_priority(T.thread, rt::priority::rt_min+1);
 
                 bool running;
-                {
-                    std::lock_guard<std::mutex> lg(T.state_mtx);
-                    running = (T.state == State::Running);
-                }
+                running = (T.state == State::Running);
 
                 if (!running) {
-                    std::lock_guard<std::mutex> lg(T.state_mtx);
                     T.state = State::Idle;
                 } 
 
-                {
-                    std::lock_guard<std::mutex> lg(T.state_mtx);
-                    T.skip_count += 1;
-                }
+                T.skip_count += 1;
                 
             }
             ++tid;
