@@ -153,37 +153,26 @@ void Executive::exec_function() {
 
         if (ap_request) {
             // Quando ricevo una richiesta aperiodica, controllo se c'è un task aperiodico in esecuzione o pending
-            {
             std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
             ap_state = ap_T.state;
-            }
+            
             if (ap_state == State::Running || ap_state == State::Pending) {
                 std::cerr << "[AP] Deadline miss: richiesta ignorata perché il task aperiodico è ancora in esecuzione\n";
-                {
-                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
-                ap_T.skip_count = 1; 
-                }
-                
+                ap_T.skip_count = 1;
             } else {
-                {
-                std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
                 ap_T.skip_count = 0;
                 ap_T.state = State::Pending;
-                }
-                
             }
             ap_running = true;
             ap_request = false;
         }
 
         // Gestione task aperiodico
-        auto ap_skip_count = 0;
         {
             std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
             ap_state = ap_T.state;
-            ap_skip_count = ap_T.skip_count;
         }
-        if (ap_state != State::Idle && ap_skip_count == 0) {
+        if (ap_state != State::Idle) {
             ap_running = true;
             if (slack_times[frame_id] > 0) {
                 // Se c'è slack time, priorità massima-1 (inferiore all'executive)
@@ -206,15 +195,8 @@ void Executive::exec_function() {
 #endif
             ap_running = false;
         }
-        
-        // Gestione skip_count per task aperiodico
-        {
-            std::lock_guard<std::mutex> lg_ap(ap_T.state_mtx);
-            if (ap_T.skip_count > 0) {
-                ap_T.skip_count = 0;
-                ap_T.state = State::Idle;
-            }
-        }
+
+
 
         // Attiva i task del frame con priorità decrescente
         rt::priority maxp = rt::priority::rt_max;;
