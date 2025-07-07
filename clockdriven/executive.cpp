@@ -240,13 +240,13 @@ void Executive::exec_function() {
             if (ap_running){
                 prio_val = maxp - static_cast<int>(i + 2);
                 #ifdef VERBOSE
-                std::cout << "[AP] ATTIVO, quindi priorità task decreased: " <<prio_val <<"\n";
+                std::cout << "[AP] ATTIVO, quindi priorità task: "<< tid <<" decreased: " <<prio_val <<"\n";
                 #endif
             }
             else {
                 prio_val = maxp - static_cast<int>(i + 1);
                 #ifdef VERBOSE
-                std::cout << "[AP] INATTIVO, quindi priorità task normal: "<<prio_val <<"\n";
+                std::cout << "[AP] INATTIVO, quindi priorità task: "<< tid <<" normal: "<<prio_val <<"\n";
                 #endif
             }
             // calcolo prio_val = maxp - (i+1), clamped a [min+1, maxp]
@@ -266,18 +266,20 @@ void Executive::exec_function() {
             T.cv.notify_one();
         }
 
-        if (ap_running){
+        if (ap_running && slack_times[frame_id] > 0){
+
             auto slack = frame_start + slack_times[frame_id] * unit_time;
-            #ifdef VERBOSE
+#ifdef VERBOSE
             std::cout << "[AP] Dormo\n";
 #endif
             std::this_thread::sleep_until(slack);
-            rt::set_priority(ap_T.thread, rt::priority::rt_min);
-            ap_T.cv.notify_one();
+        rt::set_priority(ap_T.thread, rt::priority::rt_min);
+        ap_T.cv.notify_one();
 #ifdef VERBOSE
-            std::cout << "[AP] Task aperiodico in attesa fino allo slack time, torno a dormire\n";
+        std::cout << "[AP] Task aperiodico in attesa fino allo slack time, torno a dormire\n";
 #endif
         }
+
         // dormi fino al prossimo frame
         std::this_thread::sleep_until(next_time);
 
@@ -291,7 +293,7 @@ void Executive::exec_function() {
             }
             if (!idle) {
                 std::cerr << "\e[0;31m" << "Deadline miss" << "\033[0m" << ": task " << tid << std::endl;
-                rt::set_priority(T.thread, rt::priority::rt_min);
+                rt::set_priority(T.thread, rt::priority::rt_min+1);
 
                 bool running;
                 {
